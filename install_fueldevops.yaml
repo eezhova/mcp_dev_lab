@@ -1,0 +1,70 @@
+- hosts: all
+
+  tasks:
+    - name: 'Install python-psycopg2 for ansible (to manage Postgresql)'
+      package:
+        name: 'python-psycopg2'
+
+    - name: 'Install packages for devops'
+      package:
+        name: "{{ item }}"
+      with_items:
+        - git
+        - genisoimage
+        - postgresql
+        - postgresql-server-dev-all
+        - libyaml-dev
+        - libffi-dev
+        - python-dev
+        - python-libvirt
+        - python-pip
+        - qemu-kvm
+        - qemu-utils
+        - libvirt-bin
+        - libvirt-dev
+        - ubuntu-vm-builder
+        - bridge-utils
+        - python-virtualenv
+        - libpq-dev
+        - libgmp-dev
+
+    - name: 'Install psycopg2 (dependency for devops)'
+      pip:
+        name: psycopg2
+        virtualenv: /opt/fuel-devops-venv
+        editable: false
+
+    - name: 'Install devops'
+      pip:
+        name: git+https://github.com/openstack/fuel-devops.git@master
+        virtualenv: /opt/fuel-devops-venv
+        editable: false
+
+
+- hosts: all
+  become: yes
+  become_user: postgres
+  gather_facts: no
+
+  tasks:
+    - name: 'Create DB for devops'
+      postgresql_db:
+        name: fuel_devops
+      register: database_created
+
+    - name: 'Create user for devops'
+      postgresql_user:
+        name: fuel_devops
+        password: fuel_devops
+        role_attr_flags: CREATEDB,NOSUPERUSER
+
+
+- hosts: all
+  gather_facts: no
+
+  tasks:
+    - name: 'Create DB schema for devops'
+      shell: "source /opt/fuel-devops-venv/bin/activate && django-admin.py syncdb --settings=devops.settings --noinput"
+      args:
+        executable: '/bin/bash'
+      when: database_created.changed
