@@ -1,6 +1,6 @@
 aliases:
   dynamic_addresses_pool:
-    - &pool_default !os_env POOL_DEFAULT, 10.10.0.0/16:24
+    - &pool_default !os_env POOL_DEFAULT, 20.10.0.0/16:24
 
   default_interface_model:
     - &interface_model !os_env INTERFACE_MODEL, e1000
@@ -18,6 +18,14 @@ template:
             l2_network_device: +1
           ip_ranges:
             dhcp: [+2, +127]
+      admin-pool01:
+        net: *pool_default
+        params:
+          ip_reserved:
+            gateway: +1
+            l2_network_device: +1
+          ip_ranges:
+            dhcp: [+2, +127]
       private-pool01:
         net: *pool_default
         params:
@@ -26,7 +34,7 @@ template:
             l2_network_device: +1
           ip_ranges:
             dhcp: [+2, +127]
-      admin-pool01:
+      tenant-pool01:
         net: *pool_default
         params:
           ip_reserved:
@@ -48,8 +56,9 @@ template:
 
         network_pools:
           public: public-pool01
-          private: private-pool01
           admin: admin-pool01
+          private: private-pool01
+          tenant: tenant-pool01
 
         l2_network_devices:
           public:
@@ -58,12 +67,18 @@ template:
             forward:
               mode: nat
 
+          admin:
+            address_pool: admin-pool01
+            dhcp: true
+            forward:
+              mode: nat
+
           private:
             address_pool: private-pool01
             dhcp: true
           
-          admin:
-            address_pool: admin-pool01
+          tenant:
+            address_pool: tenant-pool01
             dhcp: true
 
         nodes:
@@ -147,10 +162,10 @@ template:
                   l2_network_device: public
                   interface_model: *interface_model
                 - label: enp0s4
-                  l2_network_device: private
+                  l2_network_device: admin
                   interface_model: *interface_model
                 - label: enp0s5
-                  l2_network_device: admin
+                  l2_network_device: private
                   interface_model: *interface_model
               network_config:
                 enp0s3:
@@ -158,10 +173,10 @@ template:
                     - public
                 enp0s4:
                   networks:
-                    - private
+                    - admin
                 enp0s5:
                   networks:
-                    - admin
+                    - private
 
           - name: ctl01
             role: control 
@@ -173,7 +188,7 @@ template:
               volumes:
                 - name: system
                   capacity: !os_env NODE_VOLUME_SIZE, 20
-                  source_image: !os_env MINION_IMAGE_PATH  # https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
+                  source_image: !os_env CONTROL_IMAGE_PATH  # https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
                   format: qcow2
                 - name: iso  # Volume with name 'iso' will be used
                              # for store image with cloud-init metadata.
@@ -230,18 +245,18 @@ template:
 
               interfaces:
                 - label: eth0
-                  l2_network_device: private
+                  l2_network_device: admin
                   interface_model: *interface_model
                 - label: eth1
-                  l2_network_device: admin
+                  l2_network_device: private
                   interface_model: *interface_model
               network_config:
                 eth0:
                   networks:
-                    - private
+                    - admin
                 eth1:
                   networks:
-                    - admin
+                    - private
 
           - name: ctl02
             role: controller
@@ -257,6 +272,89 @@ template:
               <<: *control-params
               vcpu: !os_env KUBE_COMPUTE_NODE_CPU, 2
               memory: !os_env KUBE_COMPUTE_NODE_MEMORY, 8192
+              cloud_init_iface_up: enp0s3
+              volumes:
+                - name: system
+                  capacity: !os_env NODE_VOLUME_SIZE, 20
+                  source_image: !os_env MINION_IMAGE_PATH  # https://cloud-images.ubuntu.com/xenial/current/xenial-server-cloudimg-amd64-disk1.img
+                  format: qcow2
+                - name: iso  # Volume with name 'iso' will be used
+                             # for store image with cloud-init metadata.
+                  capacity: 1
+                  format: raw
+                  device: cdrom
+                  bus: ide
+                  cloudinit_meta_data: |
+                    # All the data below will be stored as a string object
+                    instance-id: iid-local1
+                    local-hostname: {hostname}
+                    network-interfaces: |
+                     auto {interface_name}
+                     iface {interface_name} inet dhcp
+
+                     auto enp0s4
+                     iface enp0s4 inet dhcp
+
+                     auto enp0s5
+                     iface enp0s5 inet dhcp
+
+                  cloudinit_user_data: |
+                    #cloud-config, see http://cloudinit.readthedocs.io/en/latest/topics/examples.html
+                    # All the data below will be stored as a string object
+
+                    ssh_pwauth: True
+                    users:
+                     - name: mirantis
+                       sudo: ALL=(ALL) NOPASSWD:ALL
+                       shell: /bin/bash
+                       ssh-authorized-keys:
+                         - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC9WND1z5CWjYrcUmEoao3sR29iqgw+i/osdFeYetGZYCaKSLWHXgvVLf19oYnFSNrsjAhpL6krcMc9luN4Uj1/qoigGQcLnV5KQo8AnkvdCDvBBVg/Y3fbgYmcEx6yPC3bbVB9gsfr8yvgrz3vE3gWApvf9uR2dDljL+TsdrVlWzIFVjKi6PEFErKxExYlQa+BeTmiHVjyKr1l+zNOOZN56nH33G3YYa/vxDO5ejio84LcG0Akul+MI+jZohNsvD/Y9EPm9CB6mmWeqpptVkXP+2HlfjyTG9s+KHvM/wcsW71vT+FR5N0OJAhcjYHsXSKDucD3+VzFTyFjpptRKGTJ eezhova@tiresh.local
+                         - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC1724XfvONyQFPwFfMTvqX5NdjNCujPICEc2CjGXdAvWm2nktiuVSo1ovEqoF0KNtpO1H3bumQNYB70FXUeWqqml5oNjrrVXvsxB3gbXx612zsdB0M8wL94qDyzmFjmKBOnIXbc214kHYo6u+JPh80+jeL3Se7knthXrF87Fk+ohLeWDIb1tpLwZ4Iiq6gnRkBwG9QX2H3eXLRMLWwJs2VBcZ6yNVdiiVRz6CON5m9qwb/WrzQZlMvIlND2v1dSJVCoEce3xE8tKG2pPhpF9R0i8d1BE0+6WfdQK2pUhhN2zj0yKc7ybLj1bw7+DU95jcXzldiVzeysDzzI4BCMtQH root@neutron-dev-3
+
+                    chpasswd:
+                     list: |
+                      mirantis:mirantis
+                     expire: False
+
+                    bootcmd:
+                     # Block access to SSH while node is preparing
+                     - cloud-init-per once sudo iptables -A INPUT -p tcp --dport 22 -j DROP
+                    runcmd:
+                     # Prepare network connection
+                     - sudo ifup {interface_name}
+                     - sudo route add default gw {gateway} {interface_name}
+
+                     # Prepare necessary packages on the node
+                     - sudo apt-get update
+                     - sudo apt-get upgrade -y
+                     - sudo apt-get install -y git python-setuptools python-dev python-pip gcc libssl-dev libffi-dev vim software-properties-common
+                     - sudo apt-get autoremove -y
+                     - sudo pip install -U setuptools pip
+
+                     # Node is ready, allow SSH access
+                     - sudo iptables -D INPUT -p tcp --dport 22 -j DROP
+
+              interfaces:
+                - label: enp0s3
+                  l2_network_device: admin
+                  interface_model: *interface_model
+                - label: enp0s4
+                  l2_network_device: private
+                  interface_model: *interface_model
+                - label: enp0s5
+                  l2_network_device: tenant
+                  interface_model: *interface_model
+              network_config:
+                enp0s3:
+                  networks:
+                    - admin
+                enp0s4:
+                  networks:
+                    - private
+                enp0s5:
+                  networks:
+                    - tenant
+
 #
 #          - name: node-5
 #            role: k8s
