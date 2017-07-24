@@ -183,7 +183,7 @@ template:
             params: &control-params
               <<: *master-params
               vcpu: !os_env CONTROLLER_NODE_CPU, 4
-              memory: !os_env CONTROLLER_NODE_MEMORY, 8192
+              memory: !os_env CONTROLLER_NODE_MEMORY, 16384
               cloud_init_iface_up: enp0s3
               volumes:
                 - name: system
