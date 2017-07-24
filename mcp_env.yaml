@@ -184,7 +184,7 @@ template:
               <<: *master-params
               vcpu: !os_env CONTROLLER_NODE_CPU, 4
               memory: !os_env CONTROLLER_NODE_MEMORY, 8192
-              cloud_init_iface_up: eth0
+              cloud_init_iface_up: enp0s3
               volumes:
                 - name: system
                   capacity: !os_env NODE_VOLUME_SIZE, 20
@@ -204,8 +204,8 @@ template:
                      auto {interface_name}
                      iface {interface_name} inet dhcp
 
-                     auto eth1
-                     iface eth1 inet dhcp
+                     auto enp0s4
+                     iface enp0s4 inet dhcp
 
                   cloudinit_user_data: |
                     #cloud-config, see http://cloudinit.readthedocs.io/en/latest/topics/examples.html
@@ -244,17 +244,17 @@ template:
                      - sudo iptables -D INPUT -p tcp --dport 22 -j DROP
 
               interfaces:
-                - label: eth0
+                - label: enp0s3
                   l2_network_device: admin
                   interface_model: *interface_model
-                - label: eth1
+                - label: enp0s4
                   l2_network_device: private
                   interface_model: *interface_model
               network_config:
-                eth0:
+                enp0s3:
                   networks:
                     - admin
-                eth1:
+                enp0s4:
                   networks:
                     - private
 
