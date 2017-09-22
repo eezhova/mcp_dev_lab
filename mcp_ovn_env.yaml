@@ -338,13 +338,17 @@ template:
                   interface_model: *interface_model
                 - label: enp0s5
                   interface_model: *interface_model
+                  l2_network_device: tenant
               network_config:
                 enp0s3:
                   networks:
                     - admin
-                enp0s4:
+                enp0s3:
                   networks:
                     - private
+                enp0s4:
+                  networks:
+                    - tenant
                 enp0s5:
                   networks:
                     - tenant
